@@ -17,6 +17,7 @@ typedef enum {
 	TOKEN_MINUS,
 	TOKEN_STAR,
 	TOKEN_SLASH,
+	TOKEN_MOD,
 
 	TOKEN_LPAREN,
 	TOKEN_RPAREN,
@@ -32,90 +33,84 @@ typedef struct {
 	size_t length;
 } Token;
 
-typedef enum { IDENTIFIER } TypeID;
-
-typedef enum { INT, FLOAT, STRING, BOOL } TypeLiteral;
-
 typedef struct {
-	TypeID ID;
-	TypeLiteral literal;
-	char* name;
-	int size;
-} TokenID;
+	const char* source;
+	size_t position;
+} Lexer;
 
-void finishID(TokenID*** IDs, int* end, int* capacity, char** curr_id_name, int* size,
-	    int curr_id_max_len) {
-	TokenID* new_ID = malloc(sizeof(TokenID));
-	new_ID->name = *curr_id_name;
-	new_ID->size = *size;
-	new_ID->ID = IDENTIFIER;
-
-	if ((*end + 1) == *capacity) {
-		*capacity *= 2;
-		*IDs = realloc(*IDs, *capacity * sizeof(TokenID*));
-	}
-	(*IDs)[++(*end)] = new_ID;
-
-	*curr_id_name = malloc(curr_id_max_len * sizeof(char));
-	*size = -1;
+void lexer_init(Lexer* lexer, const char* source) {
+	lexer->source = source;
+	lexer->position = 0;
 }
 
-TokenID** lexer(int* count, FILE* file) {
-	int capacity = *count;
-	if (file == NULL) return NULL;
+Token* lexer_next(Lexer* lexer) {
+	Token* token = malloc(sizeof(Token));
+	const char* source = lexer->source;
 
-	TokenID** IDs = malloc(capacity * sizeof(TokenID*));
+	int curr_max = 10;
 	int c;
-	int curr_id_max_len = 10;
-	char* curr_id_name = malloc(curr_id_max_len * sizeof(char));
-	int curr_id_end = -1;
-	int id_end = -1;
-
-	while ((c = fgetc(file)) != EOF) {
-		if (c == ' ') {
-			if (curr_id_end >= 0)
-				finishID(&IDs, &id_end, &capacity, &curr_id_name,
-				         &curr_id_end, curr_id_max_len);
-		} else if (c == '+' || c == '-' || c == '*' || c == '/' || c == '%') {
-			if (curr_id_end >= 0)
-				finishID(&IDs, &id_end, &capacity, &curr_id_name,
-				         &curr_id_end, curr_id_max_len);
+	while ((c = source[lexer->position]) != '\0') {
+		if (c == '+' || c == '-' || c == '*' || c == '/' || c == '%') {
+			if (c == '+') {
+				token->type = TOKEN_PLUS;
+			} else if (c == '-') {
+				token->type = TOKEN_MINUS;
+			} else if (c == '*') {
+				token->type = TOKEN_STAR;
+			} else if (c == '/') {
+				token->type = TOKEN_SLASH;
+			} else if (c == '%') {
+				token->type = TOKEN_MOD;
+			}
+			token->length = 1;
+			token->start = &source[lexer->position++];
+			return token;
 			// emit operator
 		} else if (c == '{' || c == '}' || c == '(' || c == ')') {
-			if (curr_id_end >= 0)
-				finishID(&IDs, &id_end, &capacity, &curr_id_name,
-				         &curr_id_end, curr_id_max_len);
-			// emit bracket
+			if (c == '{') {
+				token->type = TOKEN_LBRACE;
+			} else if (c == '}') {
+				token->type = TOKEN_RBRACE;
+			} else if (c == '(') {
+				token->type = TOKEN_LPAREN;
+			} else if (c == ')') {
+				token->type = TOKEN_RPAREN;
+			}
+			token->length = 1;
+			token->start = &source[lexer->position++];
+			return token;
 		} else if (isalpha(c) || c == '_') {
-			if (curr_id_end + 1 == curr_id_max_len) {
-				curr_id_max_len *= 2;
-				curr_id_name =
-				  realloc(curr_id_name, curr_id_max_len * sizeof(char));
+			token->type = TOKEN_IDENTIFIER;
+			size_t start = lexer->position;
+			token->start = &lexer->source[start];
+			while ((c = source[lexer->position]) != '\0' &&
+			       (isalnum(c) || c == '_')) {
+				lexer->position++;
 			}
-			curr_id_name[++curr_id_end] = c;
-		} else if (isdigit(c)) {
-			if (curr_id_end >= 0) {
-				finishID(&IDs, &id_end, &capacity, &curr_id_name,
-				         &curr_id_end, curr_id_max_len);
-				while (isalnum(c)) {
-					c = fgetc(file);
-				}
-				// create digit primitive
-				continue;
-			}
-			if (curr_id_end + 1 == curr_id_max_len) {
-				curr_id_max_len *= 2;
-				curr_id_name =
-				  realloc(curr_id_name, curr_id_max_len * sizeof(char));
-			}
-			curr_id_name[++curr_id_end] = c;
+			token->length = lexer->position - start;
+			return token;
 
-			// if yes create number
-			// if no add to current
+		} else if (isdigit(c)) {
+			token->type = TOKEN_INT_LITERAL;
+			size_t start = lexer->position;
+			token->start = &lexer->source[start];
+			while (isdigit(lexer->source[lexer->position])) {
+				lexer->position++;
+			}
+			if (lexer->source[lexer->position] == '.') {
+				token->type = TOKEN_FLOAT_LITERAL;
+				while (isdigit(lexer->source[lexer->position])) {
+					lexer->position++;
+				}
+			}
+			token->length = lexer->position - start;
+			return token;
 		}
+		lexer->position++;
 	}
 
-	fclose(file);
-	*count = id_end;
-	return IDs;
+	token->type = TOKEN_EOF;
+	token->length = 0;
+	token->start = &lexer->source[lexer->position];
+	return token;
 }
