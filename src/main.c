@@ -17,6 +17,8 @@ const char* token_type_name(TokenType type) {
 		return "TOKEN_FLOAT_LITERAL";
 	case TOKEN_STRING_LITERAL:
 		return "TOKEN_STRING_LITERAL";
+	case TOKEN_CHAR_LITERAL:
+		return "TOKEN_CHAR_LITERAL";
 
 	// Keywords
 	case TOKEN_INT:

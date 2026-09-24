@@ -9,9 +9,11 @@ typedef enum {
 
 	TOKEN_IDENTIFIER,
 
+	// literals
 	TOKEN_INT_LITERAL,
 	TOKEN_FLOAT_LITERAL,
 	TOKEN_STRING_LITERAL,
+	TOKEN_CHAR_LITERAL,
 
 	// Keywords
 	TOKEN_INT,
@@ -150,8 +152,43 @@ Token* lexer_next(Lexer* lexer) {
 				}
 			}
 			token->length = lexer->position - start;
-			printf("DEBUG position=%zu char='%c'\n", lexer->position,
-			       source[lexer->position]);
+
+			return token;
+		} else if (c == '\'') {
+			token->type = TOKEN_CHAR_LITERAL;
+			size_t start = lexer->position;
+			token->start = &source[start];
+
+			char second = source[lexer->position + 1];
+			if (second == '\'') {
+				token->type = TOKEN_ERROR;
+				lexer->position++;
+			} else if (second == '\\') {
+				lexer->position += 3;
+				char fourth = source[lexer->position];
+				if (fourth != '\'') {
+					token->type = TOKEN_ERROR;
+					while (fourth != ' ' && fourth != '\n' &&
+					       fourth != '\'' && fourth != '\0') {
+						lexer->position++;
+						fourth = source[lexer->position];
+					}
+				}
+			} else {
+				lexer->position += 2;
+				char third = source[lexer->position];
+				if (third != '\'') {
+					token->type = TOKEN_ERROR;
+					while (third != ' ' && third != '\n' &&
+					       third != '\'' && third != '\0') {
+						lexer->position++;
+						third = source[lexer->position];
+					}
+				}
+			}
+			if (source[lexer->position] != '\0') lexer->position++;
+			token->length = lexer->position - start;
+
 			return token;
 		} else if (c == '"') {
 			token->type = TOKEN_STRING_LITERAL;
@@ -363,6 +400,7 @@ Token* lexer_next(Lexer* lexer) {
 			return token;
 		}
 	}
+
 	token->type = TOKEN_EOF;
 	token->length = 0;
 	token->start = &source[lexer->position];
