@@ -6,11 +6,10 @@
 
 const char* token_type_name(TokenType type) {
 	switch (type) {
-	case TOKEN_EOF:
-		return "TOKEN_EOF";
 	case TOKEN_IDENTIFIER:
 		return "TOKEN_IDENTIFIER";
 
+	// Literals
 	case TOKEN_INT_LITERAL:
 		return "TOKEN_INT_LITERAL";
 	case TOKEN_FLOAT_LITERAL:
@@ -41,10 +40,10 @@ const char* token_type_name(TokenType type) {
 		return "TOKEN_RETURN";
 
 	// Arithmetic operators
-	case TOKEN_PLUS:
-		return "TOKEN_PLUS";
-	case TOKEN_MINUS:
-		return "TOKEN_MINUS";
+	case TOKEN_ADD:
+		return "TOKEN_ADD";
+	case TOKEN_SUB:
+		return "TOKEN_SUB";
 	case TOKEN_STAR:
 		return "TOKEN_STAR";
 	case TOKEN_SLASH:
@@ -73,6 +72,8 @@ const char* token_type_name(TokenType type) {
 	// Assignment
 	case TOKEN_ASSIGN:
 		return "TOKEN_ASSIGN";
+
+	// Arithmetic assignment
 	case TOKEN_ADD_ASSIGN:
 		return "TOKEN_ADD_ASSIGN";
 	case TOKEN_SUB_ASSIGN:
@@ -84,6 +85,18 @@ const char* token_type_name(TokenType type) {
 	case TOKEN_MUL_ASSIGN:
 		return "TOKEN_MUL_ASSIGN";
 
+	// Bitwise assignment
+	case TOKEN_AND_ASSIGN:
+		return "TOKEN_AND_ASSIGN";
+	case TOKEN_OR_ASSIGN:
+		return "TOKEN_OR_ASSIGN";
+	case TOKEN_XOR_ASSIGN:
+		return "TOKEN_XOR_ASSIGN";
+	case TOKEN_LSHIFT_ASSIGN:
+		return "TOKEN_LSHIFT_ASSIGN";
+	case TOKEN_RSHIFT_ASSIGN:
+		return "TOKEN_RSHIFT_ASSIGN";
+
 	// Logical
 	case TOKEN_AND:
 		return "TOKEN_AND";
@@ -92,6 +105,21 @@ const char* token_type_name(TokenType type) {
 	case TOKEN_NOT:
 		return "TOKEN_NOT";
 
+	// Bitwise
+	case TOKEN_BIT_AND:
+		return "TOKEN_BIT_AND";
+	case TOKEN_BIT_OR:
+		return "TOKEN_BIT_OR";
+	case TOKEN_BIT_NOT:
+		return "TOKEN_BIT_NOT";
+	case TOKEN_BIT_XOR:
+		return "TOKEN_BIT_XOR";
+	case TOKEN_BIT_LSHIFT:
+		return "TOKEN_BIT_LSHIFT";
+	case TOKEN_BIT_RSHIFT:
+		return "TOKEN_BIT_RSHIFT";
+
+	// Parentheses / braces
 	case TOKEN_LPAREN:
 		return "TOKEN_LPAREN";
 	case TOKEN_RPAREN:
@@ -103,11 +131,30 @@ const char* token_type_name(TokenType type) {
 
 	case TOKEN_SEMICOLON:
 		return "TOKEN_SEMICOLON";
+
 	case TOKEN_ERROR:
 		return "TOKEN_ERROR";
+
 	case TOKEN_COMMENT:
 		return "TOKEN_COMMENT";
 
+	case TOKEN_LBRACKET:
+		return "TOKEN_LBRACKET";
+
+	case TOKEN_RBRACKET:
+		return "TOKEN_RBRACKET";
+
+	case TOKEN_COMMA:
+		return "TOKEN_COMMA";
+
+	case TOKEN_DOT:
+		return "TOKEN_DOT";
+
+	case TOKEN_COLON:
+		return "TOKEN_COLON";
+
+	case TOKEN_QUESTION:
+		return "TOKEN_QUESTION";
 	default:
 		return "TOKEN_UNKNOWN";
 	}
@@ -137,10 +184,14 @@ int main() {
 	lexer_init(lexer, source);
 
 	Token* token;
+
+	i = 0;
 	while ((token = lexer_next(lexer)) != NULL) {
-		printf("Token: %s Content: %.*s\n", token_type_name(token->type),
+		printf("i:%d Token: %s Content: %.*s\n", i, token_type_name(token->type),
 		       (int)token->length, token->start);
 		free(token);
+		i++;
+		if (i == 100) break;
 	}
 
 	free(lexer);

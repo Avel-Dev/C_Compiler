@@ -5,7 +5,6 @@
 #include <string.h>
 
 typedef enum {
-	TOKEN_EOF,
 
 	TOKEN_IDENTIFIER,
 
@@ -27,8 +26,8 @@ typedef enum {
 	TOKEN_RETURN,
 
 	// Arithmetic operators
-	TOKEN_PLUS,
-	TOKEN_MINUS,
+	TOKEN_ADD,
+	TOKEN_SUB,
 	TOKEN_STAR,
 	TOKEN_SLASH,
 	TOKEN_MOD,
@@ -45,11 +44,18 @@ typedef enum {
 
 	// Assignment
 	TOKEN_ASSIGN,
+	// Arithmetic Assignment
 	TOKEN_ADD_ASSIGN,
 	TOKEN_SUB_ASSIGN,
 	TOKEN_SLASH_ASSIGN,
 	TOKEN_MOD_ASSIGN,
 	TOKEN_MUL_ASSIGN,
+	// Bitwise Assignment
+	TOKEN_AND_ASSIGN,
+	TOKEN_OR_ASSIGN,
+	TOKEN_XOR_ASSIGN,
+	TOKEN_LSHIFT_ASSIGN,
+	TOKEN_RSHIFT_ASSIGN,
 
 	// Logical
 	TOKEN_AND,
@@ -68,6 +74,13 @@ typedef enum {
 	TOKEN_RPAREN,
 	TOKEN_LBRACE,
 	TOKEN_RBRACE,
+	TOKEN_LBRACKET,
+	TOKEN_RBRACKET,
+
+	TOKEN_COMMA,
+	TOKEN_DOT,
+	TOKEN_COLON,
+	TOKEN_QUESTION,
 
 	TOKEN_SEMICOLON,
 	TOKEN_ERROR,
@@ -115,11 +128,277 @@ TokenType keyword_type(const char* start, size_t length) {
 	return TOKEN_IDENTIFIER;
 }
 
+Token* createKeyword(size_t* position, const char* source) {
+	size_t start = *position;
+	Token* token = malloc(sizeof(Token));
+	token->start = &source[*position];
+	unsigned char c;
+	while ((c = source[*position]) != '\0' && (isalnum(c) || c == '_')) {
+		(*position)++;
+	}
+	token->length = (*position) - start;
+	token->type = keyword_type(token->start, token->length);
+	return token;
+}
+
+Token* createNumericLiteral(size_t* position, const char* source) {
+	Token* token = malloc(sizeof(Token));
+	token->type = TOKEN_INT_LITERAL;
+	size_t start = *position;
+	token->start = &source[start];
+	while (isdigit(source[*position])) {
+		(*position)++;
+	}
+	if (source[*position] == '.') {
+		token->type = TOKEN_FLOAT_LITERAL;
+		(*position)++;
+		while (isdigit(source[*position])) {
+			(*position)++;
+		}
+	}
+	token->length = (*position) - start;
+
+	return token;
+}
+
+Token* createCHARLiteral(size_t* position, const char* source) {
+	Token* token = malloc(sizeof(Token));
+	token->type = TOKEN_CHAR_LITERAL;
+
+	size_t pos = *position;
+	size_t start = pos;
+	token->start = &source[start];
+
+	char second = source[pos + 1];
+	if (second == '\'') {
+		token->type = TOKEN_ERROR;
+		pos++;
+	} else if (second == '\\') {
+		pos += 3;
+		char fourth = source[pos];
+		if (fourth != '\'') {
+			token->type = TOKEN_ERROR;
+			while (fourth != ' ' && fourth != '\n' && fourth != '\'' &&
+			       fourth != '\0') {
+				pos++;
+				fourth = source[pos];
+			}
+		}
+	} else {
+		pos += 2;
+		char third = source[pos];
+		if (third != '\'') {
+			token->type = TOKEN_ERROR;
+			while (third != ' ' && third != '\n' && third != '\'' &&
+			       third != '\0') {
+				pos++;
+				third = source[pos];
+			}
+		}
+	}
+	if (source[pos] != '\0') pos++;
+	token->length = pos - start;
+	*position = pos;
+	return token;
+}
+
+Token* createStringLiteral(size_t* position, const char* source) {
+	Token* token = malloc(sizeof(Token));
+	token->type = TOKEN_STRING_LITERAL;
+	size_t pos = *position;
+	size_t start = pos++;
+	token->start = &source[start];
+	while (source[pos] != '\n' && source[pos] != '"') {
+		if (source[pos] == '\\') pos++;
+		pos++;
+	}
+	if (source[pos] == '\n') {
+		token->type = TOKEN_ERROR;
+	}
+
+	if (source[pos] != '\0') pos++;
+	token->length = pos - start;
+	*position = pos;
+	return token;
+}
+
+Token* createComment(size_t* position, const char* source) {
+	size_t pos = *position;
+	size_t start = pos;
+	Token* token = malloc(sizeof(Token));
+	token->type = TOKEN_COMMENT;
+	token->start = &source[pos];
+	char c = source[pos];
+	char sec = source[pos + 1];
+	if (sec == '*') {
+		while (!(c == '*' && sec == '/')) {
+			if (sec == '\0') break;
+			pos++;
+			c = source[pos];
+			sec = source[pos + 1];
+		}
+		if (sec == '\0') {
+			token->type = TOKEN_ERROR;
+			pos++;
+		} else if (sec == '/') {
+			pos += 2;
+		}
+	} else if (sec == '/') {
+		while (c != '\n' && c != '\0') {
+			pos++;
+			c = source[pos];
+		}
+		if (c == '\n') pos++;
+	}
+
+	token->length = pos - start;
+	*position = pos;
+	return token;
+}
+
+Token* createOperatorOrPunctuation(size_t* position, const char* source) {
+	size_t pos = *position;
+	char c = source[pos];
+	char sec = source[pos + 1];
+	int token_length = 1;
+	TokenType tokentype = TOKEN_ERROR;
+	if (c == '=' && sec == '=') {
+		token_length = 2;
+		tokentype = TOKEN_EQUALS;
+	} else if (c == '!' && sec == '=') {
+		token_length = 2;
+		tokentype = TOKEN_NOT_EQUALS;
+	} else if (c == '>' && sec == '=') {
+		token_length = 2;
+		tokentype = TOKEN_MORE_EQUALS;
+	} else if (c == '<' && sec == '=') {
+		token_length = 2;
+		tokentype = TOKEN_LESS_EQUALS;
+	} else if (c == '+' && sec == '=') {
+		token_length = 2;
+		tokentype = TOKEN_ADD_ASSIGN;
+	} else if (c == '-' && sec == '=') {
+		token_length = 2;
+		tokentype = TOKEN_SUB_ASSIGN;
+	} else if (c == '/' && sec == '=') {
+		token_length = 2;
+		tokentype = TOKEN_SLASH_ASSIGN;
+	} else if (c == '%' && sec == '=') {
+		token_length = 2;
+		tokentype = TOKEN_MOD_ASSIGN;
+	} else if (c == '*' && sec == '=') {
+		token_length = 2;
+		tokentype = TOKEN_MUL_ASSIGN;
+	} else if (c == '&' && sec == '=') {
+		token_length = 2;
+		tokentype = TOKEN_AND_ASSIGN;
+	} else if (c == '|' && sec == '=') {
+		token_length = 2;
+		tokentype = TOKEN_OR_ASSIGN;
+	} else if (c == '^' && sec == '=') {
+		token_length = 2;
+		tokentype = TOKEN_XOR_ASSIGN;
+	} else if (c == '>' && sec == '>') {
+		char third = source[pos + 2];
+		if (third == '=') {
+			token_length = 3;
+			tokentype = TOKEN_RSHIFT_ASSIGN;
+		} else {
+			token_length = 2;
+			tokentype = TOKEN_BIT_RSHIFT;
+		}
+	} else if (c == '<' && sec == '<') {
+		char third = source[pos + 2];
+		if (third == '=') {
+			token_length = 3;
+			tokentype = TOKEN_LSHIFT_ASSIGN;
+		} else {
+			token_length = 2;
+			tokentype = TOKEN_BIT_LSHIFT;
+		}
+	} else if (c == '&' && sec == '&') {
+		token_length = 2;
+		tokentype = TOKEN_AND;
+	} else if (c == '|' && sec == '|') {
+		token_length = 2;
+		tokentype = TOKEN_OR;
+	} else if (c == '+' && sec == '+') {
+		token_length = 2;
+		tokentype = TOKEN_INCREMENT;
+	} else if (c == '-' && sec == '-') {
+		token_length = 2;
+		tokentype = TOKEN_DECREMENT;
+	} else if ((c == '/' && sec == '/') || (c == '/' && sec == '*')) {
+		token_length = 2;
+		tokentype = TOKEN_COMMENT;
+		return createComment(position, source);
+	} else if (c == '!') {
+		tokentype = TOKEN_NOT;
+	} else if (c == '>') {
+		tokentype = TOKEN_MORE_THAN;
+	} else if (c == '<') {
+		tokentype = TOKEN_LESS_THAN;
+	} else if (c == '+') {
+		tokentype = TOKEN_ADD;
+	} else if (c == '-') {
+		tokentype = TOKEN_SUB;
+	} else if (c == '*') {
+		tokentype = TOKEN_STAR;
+	} else if (c == '/') {
+		tokentype = TOKEN_SLASH;
+	} else if (c == '%') {
+		tokentype = TOKEN_MOD;
+	} else if (c == '&') {
+		tokentype = TOKEN_BIT_AND;
+	} else if (c == '|') {
+		tokentype = TOKEN_BIT_OR;
+	} else if (c == '~') {
+		tokentype = TOKEN_BIT_NOT;
+	} else if (c == '^') {
+		tokentype = TOKEN_BIT_XOR;
+	} else if (c == '{') {
+		tokentype = TOKEN_LBRACE;
+	} else if (c == '}') {
+		tokentype = TOKEN_RBRACE;
+	} else if (c == '(') {
+		tokentype = TOKEN_LPAREN;
+	} else if (c == ')') {
+		tokentype = TOKEN_RPAREN;
+	} else if (c == ';') {
+		tokentype = TOKEN_SEMICOLON;
+	} else if (c == '=') {
+		tokentype = TOKEN_ASSIGN;
+	} else if (c == '[') {
+		tokentype = TOKEN_LBRACKET;
+	} else if (c == ']') {
+		tokentype = TOKEN_RBRACKET;
+	} else if (c == ',') {
+		tokentype = TOKEN_COMMA;
+	} else if (c == '.') {
+		tokentype = TOKEN_DOT;
+	} else if (c == ':') {
+		tokentype = TOKEN_COLON;
+	} else if (c == '?') {
+		tokentype = TOKEN_QUESTION;
+	} else if (c == ';') {
+		tokentype = TOKEN_SEMICOLON;
+	}
+
+	Token* token = malloc(sizeof(Token));
+	token->start = &source[pos];
+	token->type = tokentype;
+	token->length = 1;
+
+	token->length = token_length;
+	pos += token_length;
+	*position = pos;
+	return token;
+}
+
 Token* lexer_next(Lexer* lexer) {
 	if (lexer->source[lexer->position] == '\0') return NULL;
-	Token* token = malloc(sizeof(Token));
 	const char* source = lexer->source;
-
+	size_t* position = &lexer->position;
 	unsigned char c;
 	while ((c = source[lexer->position]) != '\0') {
 		if (isspace(c)) {
@@ -127,282 +406,17 @@ Token* lexer_next(Lexer* lexer) {
 			continue;
 		}
 		if (isalpha(c) || c == '_') {
-			size_t start = lexer->position;
-			token->start = &source[start];
-			while ((c = source[lexer->position]) != '\0' &&
-			       (isalnum(c) || c == '_')) {
-				lexer->position++;
-			}
-			token->length = lexer->position - start;
-			token->type = keyword_type(token->start, token->length);
-			return token;
-
+			return createKeyword(position, source);
 		} else if (isdigit(c)) {
-			token->type = TOKEN_INT_LITERAL;
-			size_t start = lexer->position;
-			token->start = &source[start];
-			while (isdigit(source[lexer->position])) {
-				lexer->position++;
-			}
-			if (source[lexer->position] == '.') {
-				token->type = TOKEN_FLOAT_LITERAL;
-				lexer->position++;
-				while (isdigit(source[lexer->position])) {
-					lexer->position++;
-				}
-			}
-			token->length = lexer->position - start;
-
-			return token;
+			return createNumericLiteral(position, source);
 		} else if (c == '\'') {
-			token->type = TOKEN_CHAR_LITERAL;
-			size_t start = lexer->position;
-			token->start = &source[start];
-
-			char second = source[lexer->position + 1];
-			if (second == '\'') {
-				token->type = TOKEN_ERROR;
-				lexer->position++;
-			} else if (second == '\\') {
-				lexer->position += 3;
-				char fourth = source[lexer->position];
-				if (fourth != '\'') {
-					token->type = TOKEN_ERROR;
-					while (fourth != ' ' && fourth != '\n' &&
-					       fourth != '\'' && fourth != '\0') {
-						lexer->position++;
-						fourth = source[lexer->position];
-					}
-				}
-			} else {
-				lexer->position += 2;
-				char third = source[lexer->position];
-				if (third != '\'') {
-					token->type = TOKEN_ERROR;
-					while (third != ' ' && third != '\n' &&
-					       third != '\'' && third != '\0') {
-						lexer->position++;
-						third = source[lexer->position];
-					}
-				}
-			}
-			if (source[lexer->position] != '\0') lexer->position++;
-			token->length = lexer->position - start;
-
-			return token;
+			return createCHARLiteral(position, source);
 		} else if (c == '"') {
-			token->type = TOKEN_STRING_LITERAL;
-			size_t start = lexer->position++;
-			token->start = &source[start];
-			while (source[lexer->position] != '\0' &&
-			       source[lexer->position] != '"') {
-				lexer->position++;
-			}
-			if (source[lexer->position] == '\0') {
-				token->type = TOKEN_ERROR;
-				token->length = lexer->position - start;
-				return token;
-			}
-			lexer->position++;
-			token->length = lexer->position - start;
-			return token;
+			return createStringLiteral(position, source);
 		} else {
-			token->type = TOKEN_ERROR;
-			char sec = source[lexer->position + 1];
-			if (c == '=') {
-				token->type = TOKEN_ASSIGN;
-				if (sec == '=') {
-					token->type = TOKEN_EQUALS;
-					token->length = 2;
-					token->start = &source[lexer->position];
-					lexer->position += 2;
-					return token;
-				}
-			} else if (c == '+') {
-				token->type = TOKEN_PLUS;
-				if (sec == '+') {
-					token->type = TOKEN_INCREMENT;
-					token->length = 2;
-					token->start = &source[lexer->position];
-					lexer->position += 2;
-					return token;
-				} else if (sec == '=') {
-					token->type = TOKEN_ADD_ASSIGN;
-					token->length = 2;
-					token->start = &source[lexer->position];
-
-					lexer->position += 2;
-					return token;
-				}
-
-			} else if (c == '-') {
-				token->type = TOKEN_MINUS;
-				char sec = source[lexer->position + 1];
-				if (sec == '-') {
-					token->type = TOKEN_DECREMENT;
-					token->length = 2;
-					token->start = &source[lexer->position];
-					lexer->position += 2;
-					return token;
-				} else if (sec == '=') {
-					token->type = TOKEN_SUB_ASSIGN;
-					token->length = 2;
-					token->start = &source[lexer->position];
-
-					lexer->position += 2;
-					return token;
-				}
-
-			} else if (c == '*') {
-				token->type = TOKEN_STAR;
-				if (sec == '=') {
-					token->type = TOKEN_MUL_ASSIGN;
-					token->length = 2;
-					token->start = &source[lexer->position];
-
-					lexer->position += 2;
-					return token;
-				}
-			} else if (c == '/') {
-				token->type = TOKEN_SLASH;
-				if (sec == '=') {
-					token->type = TOKEN_SLASH_ASSIGN;
-					token->length = 2;
-					token->start = &source[lexer->position];
-
-					lexer->position += 2;
-					return token;
-				} else if (sec == '/') {
-					token->type = TOKEN_COMMENT;
-					token->start = &source[lexer->position];
-					size_t start = lexer->position;
-					while (c != '\n' && c != '\0') {
-						c = source[lexer->position++];
-					}
-					if (c == '\n') lexer->position++;
-
-					token->length = lexer->position - start;
-					return token;
-				} else if (sec == '*') {
-					token->type = TOKEN_COMMENT;
-					token->start = &source[lexer->position];
-					size_t start = lexer->position;
-					lexer->position += 2;
-					c = source[lexer->position];
-					sec = source[lexer->position + 1];
-
-					while (!(c == '*' && sec == '/')) {
-						if (sec == '\0') break;
-						lexer->position++;
-						c = source[lexer->position];
-						sec = source[lexer->position + 1];
-					}
-					if (sec == '/') {
-						lexer->position += 2;
-					} else
-						lexer->position++;
-					token->length = lexer->position - start;
-					return token;
-				}
-			} else if (c == '%') {
-				token->type = TOKEN_MOD;
-				if (sec == '=') {
-					token->type = TOKEN_MOD_ASSIGN;
-					token->length = 2;
-					token->start = &source[lexer->position];
-
-					lexer->position += 2;
-					return token;
-				}
-			} else if (c == '{') {
-				token->type = TOKEN_LBRACE;
-			} else if (c == '}') {
-				token->type = TOKEN_RBRACE;
-			} else if (c == '(') {
-				token->type = TOKEN_LPAREN;
-			} else if (c == ')') {
-				token->type = TOKEN_RPAREN;
-			} else if (c == ';') {
-				token->type = TOKEN_SEMICOLON;
-			} else if (c == '<') {
-				token->type = TOKEN_LESS_THAN;
-				if (sec == '=') {
-					token->type = TOKEN_LESS_EQUALS;
-					token->length = 2;
-					token->start = &source[lexer->position];
-
-					lexer->position += 2;
-					return token;
-				} else if (sec == '<') {
-					token->type = TOKEN_BIT_LSHIFT;
-					token->length = 2;
-					token->start = &source[lexer->position];
-
-					lexer->position += 2;
-					return token;
-				}
-			} else if (c == '>') {
-				token->type = TOKEN_MORE_THAN;
-				if (sec == '=') {
-					token->type = TOKEN_MORE_EQUALS;
-					token->length = 2;
-					token->start = &source[lexer->position];
-
-					lexer->position += 2;
-					return token;
-				} else if (sec == '>') {
-					token->type = TOKEN_BIT_RSHIFT;
-					token->length = 2;
-					token->start = &source[lexer->position];
-
-					lexer->position += 2;
-					return token;
-				}
-			} else if (c == '&') {
-				token->type = TOKEN_BIT_AND;
-				if (sec == '&') {
-					token->type = TOKEN_AND;
-					token->length = 2;
-					token->start = &source[lexer->position];
-
-					lexer->position += 2;
-					return token;
-				}
-			} else if (c == '|') {
-				token->type = TOKEN_BIT_OR;
-				if (sec == '|') {
-					token->type = TOKEN_OR;
-					token->length = 2;
-					token->start = &source[lexer->position];
-
-					lexer->position += 2;
-					return token;
-				}
-			} else if (c == '!') {
-				token->type = TOKEN_NOT;
-				if (sec == '=') {
-					token->type = TOKEN_NOT_EQUALS;
-					token->length = 2;
-					token->start = &source[lexer->position];
-
-					lexer->position += 2;
-					return token;
-				}
-
-			} else if (c == '~') {
-				token->type = TOKEN_BIT_NOT;
-			} else if (c == '^') {
-				token->type = TOKEN_BIT_XOR;
-			}
-
-			token->length = 1;
-			token->start = &source[lexer->position++];
-			return token;
+			return createOperatorOrPunctuation(position, source);
 		}
 	}
 
-	token->type = TOKEN_EOF;
-	token->length = 0;
-	token->start = &source[lexer->position];
-	return token;
+	return NULL;
 }
