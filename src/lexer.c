@@ -1,103 +1,164 @@
+#include "lexer.h"
+
 #include <ctype.h>
-#include <stddef.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-typedef enum {
+const char* token_type_name(TokenType type) {
+	switch (type) {
+	case TOKEN_IDENTIFIER:
+		return "TOKEN_IDENTIFIER";
 
-	TOKEN_IDENTIFIER,
-
-	// literals
-	TOKEN_INT_LITERAL,
-	TOKEN_FLOAT_LITERAL,
-	TOKEN_STRING_LITERAL,
-	TOKEN_CHAR_LITERAL,
+	// Literals
+	case TOKEN_INT_LITERAL:
+		return "TOKEN_INT_LITERAL";
+	case TOKEN_FLOAT_LITERAL:
+		return "TOKEN_FLOAT_LITERAL";
+	case TOKEN_STRING_LITERAL:
+		return "TOKEN_STRING_LITERAL";
+	case TOKEN_CHAR_LITERAL:
+		return "TOKEN_CHAR_LITERAL";
 
 	// Keywords
-	TOKEN_INT,
-	TOKEN_FLOAT,
-	TOKEN_CHAR,
-	TOKEN_VOID,
-	TOKEN_IF,
-	TOKEN_ELSE,
-	TOKEN_WHILE,
-	TOKEN_FOR,
-	TOKEN_RETURN,
+	case TOKEN_INT:
+		return "TOKEN_INT";
+	case TOKEN_FLOAT:
+		return "TOKEN_FLOAT";
+	case TOKEN_CHAR:
+		return "TOKEN_CHAR";
+	case TOKEN_VOID:
+		return "TOKEN_VOID";
+	case TOKEN_IF:
+		return "TOKEN_IF";
+	case TOKEN_ELSE:
+		return "TOKEN_ELSE";
+	case TOKEN_WHILE:
+		return "TOKEN_WHILE";
+	case TOKEN_FOR:
+		return "TOKEN_FOR";
+	case TOKEN_RETURN:
+		return "TOKEN_RETURN";
 
 	// Arithmetic operators
-	TOKEN_ADD,
-	TOKEN_SUB,
-	TOKEN_STAR,
-	TOKEN_SLASH,
-	TOKEN_MOD,
-	TOKEN_INCREMENT,
-	TOKEN_DECREMENT,
+	case TOKEN_ADD:
+		return "TOKEN_ADD";
+	case TOKEN_SUB:
+		return "TOKEN_SUB";
+	case TOKEN_STAR:
+		return "TOKEN_STAR";
+	case TOKEN_SLASH:
+		return "TOKEN_SLASH";
+	case TOKEN_MOD:
+		return "TOKEN_MOD";
+	case TOKEN_INCREMENT:
+		return "TOKEN_INCREMENT";
+	case TOKEN_DECREMENT:
+		return "TOKEN_DECREMENT";
 
-	// relational operators
-	TOKEN_EQUALS,
-	TOKEN_NOT_EQUALS,
-	TOKEN_LESS_THAN,
-	TOKEN_MORE_THAN,
-	TOKEN_LESS_EQUALS,
-	TOKEN_MORE_EQUALS,
+	// Relational operators
+	case TOKEN_EQUALS:
+		return "TOKEN_EQUALS";
+	case TOKEN_NOT_EQUALS:
+		return "TOKEN_NOT_EQUALS";
+	case TOKEN_LESS_THAN:
+		return "TOKEN_LESS_THAN";
+	case TOKEN_MORE_THAN:
+		return "TOKEN_MORE_THAN";
+	case TOKEN_LESS_EQUALS:
+		return "TOKEN_LESS_EQUALS";
+	case TOKEN_MORE_EQUALS:
+		return "TOKEN_MORE_EQUALS";
 
 	// Assignment
-	TOKEN_ASSIGN,
-	// Arithmetic Assignment
-	TOKEN_ADD_ASSIGN,
-	TOKEN_SUB_ASSIGN,
-	TOKEN_SLASH_ASSIGN,
-	TOKEN_MOD_ASSIGN,
-	TOKEN_MUL_ASSIGN,
-	// Bitwise Assignment
-	TOKEN_AND_ASSIGN,
-	TOKEN_OR_ASSIGN,
-	TOKEN_XOR_ASSIGN,
-	TOKEN_LSHIFT_ASSIGN,
-	TOKEN_RSHIFT_ASSIGN,
+	case TOKEN_ASSIGN:
+		return "TOKEN_ASSIGN";
+
+	// Arithmetic assignment
+	case TOKEN_ADD_ASSIGN:
+		return "TOKEN_ADD_ASSIGN";
+	case TOKEN_SUB_ASSIGN:
+		return "TOKEN_SUB_ASSIGN";
+	case TOKEN_SLASH_ASSIGN:
+		return "TOKEN_SLASH_ASSIGN";
+	case TOKEN_MOD_ASSIGN:
+		return "TOKEN_MOD_ASSIGN";
+	case TOKEN_MUL_ASSIGN:
+		return "TOKEN_MUL_ASSIGN";
+
+	// Bitwise assignment
+	case TOKEN_AND_ASSIGN:
+		return "TOKEN_AND_ASSIGN";
+	case TOKEN_OR_ASSIGN:
+		return "TOKEN_OR_ASSIGN";
+	case TOKEN_XOR_ASSIGN:
+		return "TOKEN_XOR_ASSIGN";
+	case TOKEN_LSHIFT_ASSIGN:
+		return "TOKEN_LSHIFT_ASSIGN";
+	case TOKEN_RSHIFT_ASSIGN:
+		return "TOKEN_RSHIFT_ASSIGN";
 
 	// Logical
-	TOKEN_AND,
-	TOKEN_OR,
-	TOKEN_NOT,
+	case TOKEN_AND:
+		return "TOKEN_AND";
+	case TOKEN_OR:
+		return "TOKEN_OR";
+	case TOKEN_NOT:
+		return "TOKEN_NOT";
 
-	// BITWISE
-	TOKEN_BIT_AND,
-	TOKEN_BIT_OR,
-	TOKEN_BIT_NOT,
-	TOKEN_BIT_XOR,
-	TOKEN_BIT_LSHIFT,
-	TOKEN_BIT_RSHIFT,
+	// Bitwise
+	case TOKEN_BIT_AND:
+		return "TOKEN_BIT_AND";
+	case TOKEN_BIT_OR:
+		return "TOKEN_BIT_OR";
+	case TOKEN_BIT_NOT:
+		return "TOKEN_BIT_NOT";
+	case TOKEN_BIT_XOR:
+		return "TOKEN_BIT_XOR";
+	case TOKEN_BIT_LSHIFT:
+		return "TOKEN_BIT_LSHIFT";
+	case TOKEN_BIT_RSHIFT:
+		return "TOKEN_BIT_RSHIFT";
 
-	TOKEN_LPAREN,
-	TOKEN_RPAREN,
-	TOKEN_LBRACE,
-	TOKEN_RBRACE,
-	TOKEN_LBRACKET,
-	TOKEN_RBRACKET,
+	// Parentheses / braces
+	case TOKEN_LPAREN:
+		return "TOKEN_LPAREN";
+	case TOKEN_RPAREN:
+		return "TOKEN_RPAREN";
+	case TOKEN_LBRACE:
+		return "TOKEN_LBRACE";
+	case TOKEN_RBRACE:
+		return "TOKEN_RBRACE";
 
-	TOKEN_COMMA,
-	TOKEN_DOT,
-	TOKEN_COLON,
-	TOKEN_QUESTION,
+	case TOKEN_SEMICOLON:
+		return "TOKEN_SEMICOLON";
 
-	TOKEN_SEMICOLON,
-	TOKEN_ERROR,
+	case TOKEN_ERROR:
+		return "TOKEN_ERROR";
 
-	TOKEN_COMMENT
-} TokenType;
+	case TOKEN_COMMENT:
+		return "TOKEN_COMMENT";
 
-typedef struct {
-	TokenType type;
-	const char* start;
-	size_t length;
-} Token;
+	case TOKEN_LBRACKET:
+		return "TOKEN_LBRACKET";
 
-typedef struct {
-	const char* source;
-	size_t position;
-} Lexer;
+	case TOKEN_RBRACKET:
+		return "TOKEN_RBRACKET";
+
+	case TOKEN_COMMA:
+		return "TOKEN_COMMA";
+
+	case TOKEN_DOT:
+		return "TOKEN_DOT";
+
+	case TOKEN_COLON:
+		return "TOKEN_COLON";
+
+	case TOKEN_QUESTION:
+		return "TOKEN_QUESTION";
+	default:
+		return "TOKEN_UNKNOWN";
+	}
+}
 
 void lexer_init(Lexer* lexer, const char* source) {
 	lexer->source = source;

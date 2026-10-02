@@ -11,4 +11,8 @@ endif()
 
 add_executable(C_Compiler
     src/main.c
+    src/lexer.c
+    src/lexer.h
+    src/parser.c
+    src/parser.h
 )
