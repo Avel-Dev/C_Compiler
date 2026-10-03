@@ -111,3 +111,9 @@ Token* createComment(size_t* position, const char* source);
 Token* createOperatorOrPunctuation(size_t* position, const char* source);
 
 Token* lexer_next(Lexer* lexer);
+
+int isLiteral(TokenType type);
+
+int isBinaryOperator(TokenType type);
+
+void print_token(const Token* token);

@@ -1,6 +1,7 @@
 #include "lexer.h"
 
 #include <ctype.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -480,4 +481,24 @@ Token* lexer_next(Lexer* lexer) {
 	}
 
 	return NULL;
+}
+
+int isLiteral(TokenType type) {
+	if (type == TOKEN_INT_LITERAL || type == TOKEN_FLOAT_LITERAL ||
+	    type == TOKEN_CHAR_LITERAL || type == TOKEN_STRING_LITERAL)
+		return 1;
+	return 0;
+}
+
+int isBinaryOperator(TokenType type) {
+	if (type == TOKEN_STAR || type == TOKEN_MOD || type == TOKEN_ADD || type == TOKEN_SUB ||
+	    type == TOKEN_SLASH) {
+		return 1;
+	}
+	return 0;
+}
+
+void print_token(const Token* token) {
+	printf("Token: %s Content: %.*s\n", token_type_name(token->type), (int)token->length,
+	       token->start);
 }

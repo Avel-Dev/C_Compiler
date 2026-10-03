@@ -7,11 +7,11 @@
 
 int main() {
 	int i = 0, c = 0;
-	FILE* file = fopen("test.unn", "r");
+	FILE* file = fopen("parser.unn", "r");
 	Lexer* lexer = malloc(sizeof(Lexer));
 
 	if (!file) {
-		perror("test.unn");
+		perror("parser.unn");
 		return 1;
 	}
 	int count = 100;
@@ -28,20 +28,18 @@ int main() {
 
 	lexer_init(lexer, source);
 
-	Token* token;
-
-	i = 0;
-	while ((token = lexer_next(lexer)) != NULL) {
-		printf("i:%d Token: %s Content: %.*s\n", i, token_type_name(token->type),
-		       (int)token->length, token->start);
-		free(token);
-		i++;
-		if (i == 100) break;
-	}
-
+	/*
+		i = 0;
+		while ((token = lexer_next(lexer)) != NULL) {
+			printf("i:%d Token: %s Content: %.*s\n", i,
+	   token_type_name(token->type), (int)token->length, token->start); free(token); i++; if
+	   (i == 100) break;
+		}
+	*/
 	Parser* parser = malloc(sizeof(Parser));
 	parser_init(parser, lexer);
 
+	ASTNode* module = parse_module(parser);
 	free(lexer);
 	free(parser);
 

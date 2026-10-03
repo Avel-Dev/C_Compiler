@@ -1,0 +1,78 @@
+#include "parser.h"
+
+#include "lexer.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+
+Token* expect(Parser* parser, TokenType type) {
+	Token* token = parser->token;
+	if (token->type == type) {
+		parser_advance(parser);
+		return token;
+	}
+	return NULL;
+}
+
+ASTNode* parse_declaration(Parser* parser) {
+	Token *type = NULL, *id = NULL;
+	if ((type = expect(parser, TOKEN_INT)))
+		if ((id = expect(parser, TOKEN_IDENTIFIER)))
+			if (expect(parser, TOKEN_SEMICOLON)) {
+				ASTNode* ast = malloc(sizeof(ASTNode));
+				ast->data.declaration = malloc(sizeof(DeclarationNode));
+				ast->data.declaration->identifier = id;
+				ast->data.declaration->type = type;
+				ast->type = AST_DECLARATION;
+
+				if () return ast;
+			} else if (expect(parser, TOKEN_SEMICOLON))
+
+				printf("ast not created\n");
+	return NULL;
+}
+
+void parser_init(Parser* parser, Lexer* lexer) {
+	parser->lexer = lexer;
+	parser->next = lexer_next(lexer);
+	parser_advance(parser);
+}
+
+void parser_advance(Parser* parser) {
+	parser->token = parser->next;
+	parser->next = lexer_next(parser->lexer);
+}
+
+ASTNode* parse_module(Parser* parser) {
+	ASTNode* astnode = malloc(sizeof(ASTNode));
+	ModuleNode* module = malloc(sizeof(ModuleNode));
+	int count = 0;
+	int size = 1;
+	module->nodes = malloc(size * sizeof(ASTNode*));
+	while (parser->token) {
+		ASTNode* var = parse_declaration(parser);
+		if (!var) return NULL;
+		const Token* id = var->data.declaration->identifier;
+		const Token* type = var->data.declaration->type;
+		// const Token* literal = var->data.declaration->literal;
+
+		printf("id: %s Content: %.*s\n", token_type_name(id->type), (int)id->length,
+		       id->start);
+		printf("type: %s Content: %.*s\n", token_type_name(type->type),
+		       (int)type->length, type->start);
+		//	printf("literal: %s Content: %.*s\n", token_type_name(literal->type),
+		//(int)literal->length, literal->start);
+
+		if (count == size) {
+			size *= 2;
+			module->nodes = realloc(module->nodes, size * sizeof(ASTNode*));
+		}
+		module->nodes[count++] = var;
+	}
+	module->count = count;
+	module->size = size;
+	astnode->data.module = module;
+	astnode->type = AST_MODULE;
+
+	return astnode;
+}
