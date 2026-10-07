@@ -13,6 +13,7 @@ typedef enum {
 	AST_BINARY_OPERATOR
 } ASTNodeType;
 
+char* AST_Node_name(ASTNodeType type);
 typedef struct ASTNode ASTNode;
 
 typedef struct {
@@ -28,10 +29,15 @@ typedef struct {
 } FunctionNode;
 
 typedef struct {
-	const Token* op;
+	const Token* operator;
 	ASTNode* left;
 	ASTNode* right;
 } BinaryOperatorNode;
+
+typedef struct {
+	const Token* operator;
+	ASTNode* operand;
+} UnaryOperatorNode;
 
 typedef struct {
 	const Token* literal;
@@ -54,6 +60,7 @@ union Data {
 	LiteralNode* literal;
 	IdentifierNode* identifier;
 	DeclarationNode* declaration;
+	UnaryOperatorNode* unary;
 };
 
 struct ASTNode {

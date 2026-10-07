@@ -114,6 +114,7 @@ Token* lexer_next(Lexer* lexer);
 
 int isLiteral(TokenType type);
 
+int isUnaryOperator(TokenType type);
 int isBinaryOperator(TokenType type);
 
 void print_token(const Token* token);

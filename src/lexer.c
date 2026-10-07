@@ -490,6 +490,14 @@ int isLiteral(TokenType type) {
 	return 0;
 }
 
+int isUnaryOperator(TokenType type) {
+	if (type == TOKEN_INCREMENT || type == TOKEN_INCREMENT || type == TOKEN_STAR ||
+	    type == TOKEN_SUB) {
+		return 1;
+	}
+	return 0;
+}
+
 int isBinaryOperator(TokenType type) {
 	if (type == TOKEN_STAR || type == TOKEN_MOD || type == TOKEN_ADD || type == TOKEN_SUB ||
 	    type == TOKEN_SLASH) {
