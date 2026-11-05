@@ -3,9 +3,70 @@
 #include "lexer.h"
 
 #include <inttypes.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+void print_node(const ASTNode* root) {
+	printf("AST Node:  %s\n", AST_Node_name(root->type));
+	if (root->type == AST_LITERAL) {
+		print_token(root->data.literal->literal);
+	}
+	if (root->type == AST_BINARY_OPERATOR) {
+		print_token(root->data.binary->operator);
+		printf("Left ");
+		print_node(root->data.binary->left);
+
+		printf("Reft ");
+		print_node(root->data.binary->right);
+	}
+	if (root->type == AST_UNARY_OPERATOR) {
+		print_token(root->data.unary->operator);
+		print_node(root->data.unary->operand);
+	}
+	if (root->type == AST_DECLARATION) {
+		print_token(root->data.declaration->identifier);
+		print_token(root->data.declaration->type);
+		if (root->data.declaration->initializer)
+			print_node(root->data.declaration->initializer);
+	}
+	if (root->type == AST_IDENTIFIER) {
+		print_token(root->data.identifier->identifier);
+	}
+}
+
+int get_precedence(TokenType type) {
+	switch (type) {
+	case TOKEN_STAR:
+	case TOKEN_SLASH:
+	case TOKEN_MOD:
+		return 6;
+
+	case TOKEN_ADD:
+	case TOKEN_SUB:
+		return 5;
+
+	case TOKEN_LESS_THAN:
+	case TOKEN_MORE_THAN:
+	case TOKEN_LESS_EQUALS:
+	case TOKEN_MORE_EQUALS:
+		return 4;
+
+	case TOKEN_EQUALS:
+	case TOKEN_NOT_EQUALS:
+		return 3;
+
+	case TOKEN_AND:
+		return 2;
+
+	case TOKEN_OR:
+		return 1;
+
+	default:
+		return -1;
+	}
+}
 
 char* AST_Node_name(ASTNodeType type) {
 	switch (type) {
@@ -25,22 +86,78 @@ char* AST_Node_name(ASTNodeType type) {
 		return "AST_INITIALIZER";
 	case AST_BINARY_OPERATOR:
 		return "AST_BINARY_OPERATOR";
+	case AST_EXPRESSION:
+		return "AST_EXPRESSION";
+	case AST_ERROR:
+		return "AST_ERROR";
 	}
 
 	return "NOT VALID TYPE";
 }
 
 Token* expect(Parser* parser, TokenType type) {
-	Token* token = parser->token;
+	const Token* token = parser_peek(parser);
 	if (token && token->type == type) {
-		parser_advance(parser);
-		return token;
+		return parser_advance(parser);
 	}
 	return NULL;
 }
 
-ASTNode* parse_expression(Parser* parser) {
-	return NULL;
+ASTNode* parse_expression(Parser* parser, int min_precedence) {
+	Token* token = parser_peek(parser);
+	ASTNode* left = NULL;
+
+	while (token && token->type != TOKEN_SEMICOLON) {
+		print_token(token);
+
+		if (token->type == TOKEN_IDENTIFIER) {
+			left = malloc(sizeof(ASTNode));
+			left->type = AST_IDENTIFIER;
+			left->data.identifier = malloc(sizeof(IdentifierNode));
+			left->data.identifier->identifier = token;
+			parser_advance(parser);
+		} else if (isLiteral(token->type)) {
+			left = malloc(sizeof(ASTNode));
+			left->type = AST_LITERAL;
+			left->data.literal = malloc(sizeof(LiteralNode));
+			left->data.literal->literal = token;
+			parser_advance(parser);
+		} else if (isBinaryOperator(token->type)) {
+			if (!left) {
+				// throw parser error
+			}
+			int precedence = get_precedence(token->type);
+
+			if (precedence < min_precedence) {
+				return left;
+			}
+			BinaryOperatorNode* binary_operator =
+			  malloc(sizeof(BinaryOperatorNode));
+			binary_operator->operator = token;
+			binary_operator->left = left;
+			parser_advance(parser);
+			binary_operator->right = parse_expression(parser, precedence + 1);
+			left = malloc(sizeof(ASTNode));
+			left->type = AST_BINARY_OPERATOR;
+			left->data.binary = binary_operator;
+		} else if (token->type == TOKEN_LPAREN) {
+			if (left) {
+				// throw parser error
+			}
+			free(token);
+			parser_advance(parser);
+		} else if (token->type == TOKEN_RPAREN) {
+			free(token);
+			parser_advance(parser);
+			return left;
+		}
+		token = parser_peek(parser);
+	}
+	if (token && token->type == TOKEN_SEMICOLON) {
+		free(token);
+		parser_advance(parser);
+	}
+	return left;
 }
 
 ASTNode* parse_quality(Parser* parser) {
@@ -59,68 +176,52 @@ ASTNode* parse_unary(Parser* parser) {
 	return NULL;
 }
 
-ASTNode* parse_primary(Parser* parser) {
-	return NULL;
+char* string_concate(const char* null_terminated, const char* non_null_terminated, int len) {
+	int literal_len = strlen(null_terminated);
+	char* result = malloc(literal_len + len);
+	memcpy(result, null_terminated, literal_len);
+	memcpy(result + literal_len, non_null_terminated, len);
+	result[literal_len + len] = '\0';
+	return result;
 }
+
+/*
+ASTNode* parse_primary(Parser* parser) {
+	if (parser->token == NULL) return NULL;
+
+	ASTNode* curr = malloc(sizeof(ASTNode));
+	const Token* token = parser_peek(parser);
+	if (isLiteral(token->type)) {
+		curr->data.literal = malloc(sizeof(LiteralNode));
+		curr->data.literal->literal = parser_advance(parser);
+		curr->type = AST_LITERAL;
+
+	} else if (token->type == TOKEN_IDENTIFIER) {
+		curr->data.identifier = malloc(sizeof(IdentifierNode));
+		curr->data.identifier->identifier = parser_advance(parser);
+		curr->type = AST_IDENTIFIER;
+	} else if (token->type == TOKEN_LPAREN) {
+		free(curr);
+		free(parser_advance(parser));
+		curr = parse_expression(parser);
+		curr->type = AST_EXPRESSION;
+	} else {
+		curr->type = AST_ERROR;
+		curr->data.error = malloc(sizeof(ErrorNode));
+		curr->data.error->error_string = string_concate(
+		  "expected primary not found: instead found", token->start, token->length);
+	}
+
+	return curr;
+}*/
 
 ASTNode* parse_initializer(Parser* parser) {
 	if (!parser->token) {
 		return NULL;
 	}
-	ASTNode* curr = NULL;
 
-	if (isLiteral(parser->token->type)) {
-		curr = malloc(sizeof(ASTNode));
-		curr->data.literal = malloc(sizeof(LiteralNode));
-		curr->data.literal->literal = parser->token;
-		curr->type = AST_LITERAL;
-
-		parser_advance(parser);
-	} else if (parser->token->type == TOKEN_IDENTIFIER) {
-		curr = malloc(sizeof(ASTNode));
-		curr->data.identifier = malloc(sizeof(IdentifierNode));
-		curr->data.identifier->identifier = parser->token;
-		curr->type = AST_IDENTIFIER;
-
-		parser_advance(parser);
-	}
-
-	if (curr && parser->token && isBinaryOperator(parser->token->type)) {
-		ASTNode* newnode = malloc(sizeof(ASTNode));
-		BinaryOperatorNode* binary = malloc(sizeof(BinaryOperatorNode));
-		binary->left = curr;
-
-		binary->operator = parser->token;
-
-		parser_advance(parser);
-		binary->right = parse_initializer(parser);
-
-		newnode->type = AST_BINARY_OPERATOR;
-		newnode->data.binary = binary;
-		curr = newnode;
-
-	} else if (parser->token && isUnaryOperator(parser->token->type)) {
-		UnaryOperatorNode* unary = malloc(sizeof(UnaryOperatorNode));
-
-		unary->operator = parser->token;
-		if (curr) {
-			unary->operand = curr;
-		} else {
-			parser_advance(parser);
-
-			unary->operand = parse_initializer(parser);
-			if (!unary->operand) {
-				// emit parser error
-			}
-		}
-
-		ASTNode* newnode = malloc(sizeof(ASTNode));
-		newnode->type = AST_UNARY_OPERATOR;
-		newnode->data.unary = unary;
-		curr = newnode;
-	}
-
-	return curr;
+	//	return parse_primary(parser);
+	return parse_expression(parser, INT_MIN);
 }
 
 ASTNode* parse_declaration(Parser* parser) {
@@ -136,13 +237,12 @@ ASTNode* parse_declaration(Parser* parser) {
 			declaration->type = type;
 			declaration->initializer = NULL;
 
-			if ((literal = expect(parser, TOKEN_ASSIGN))) {
-				free(literal);
+			const Token* token = parser_peek(parser);
+			if (token->type == TOKEN_ASSIGN) {
+				free(parser_advance(parser));
 				declaration->initializer = parse_initializer(parser);
-			}
-			if (parser->token && parser->token->type == TOKEN_SEMICOLON) {
-				free(parser->token);
-				parser_advance(parser);
+			} else if (token->type == TOKEN_SEMICOLON) {
+				free(parser_advance(parser));
 			}
 
 			ast->data.declaration = declaration;
@@ -160,35 +260,15 @@ void parser_init(Parser* parser, Lexer* lexer) {
 	parser_advance(parser);
 }
 
-void parser_advance(Parser* parser) {
+Token* parser_advance(Parser* parser) {
+	Token* temp = parser->token;
 	parser->token = parser->next;
-
 	parser->next = lexer_next(parser->lexer);
+	return temp;
 }
 
-void print_node(const ASTNode* root) {
-	printf("AST Node:  %s\n", AST_Node_name(root->type));
-	if (root->type == AST_LITERAL) {
-		print_token(root->data.literal->literal);
-	}
-	if (root->type == AST_BINARY_OPERATOR) {
-		print_token(root->data.binary->operator);
-		print_node(root->data.binary->left);
-		print_node(root->data.binary->right);
-	}
-	if (root->type == AST_UNARY_OPERATOR) {
-		print_token(root->data.unary->operator);
-		print_node(root->data.unary->operand);
-	}
-	if (root->type == AST_DECLARATION) {
-		print_token(root->data.declaration->identifier);
-		print_token(root->data.declaration->type);
-		if (root->data.declaration->initializer)
-			print_node(root->data.declaration->initializer);
-	}
-	if (root->type == AST_IDENTIFIER) {
-		print_token(root->data.identifier->identifier);
-	}
+Token* parser_peek(Parser* parser) {
+	return parser->token;
 }
 
 ASTNode* parse_module(Parser* parser) {
@@ -197,15 +277,11 @@ ASTNode* parse_module(Parser* parser) {
 	int count = 0;
 	int size = 1;
 	module->nodes = malloc(size * sizeof(ASTNode*));
-
-	while (parser->token) {
-		ASTNode* var = parse_declaration(parser);
-		if (!var) return NULL;
-		const Token* id = var->data.declaration->identifier;
-		const Token* type = var->data.declaration->type;
-		const ASTNode* initializer = var->data.declaration->initializer;
+	int h = 0;
+	while (h < 5 && parser->token) {
+		h++;
+		ASTNode* var = parse_expression(parser, INT_MIN);
 		print_node(var);
-
 		if (count == size) {
 			size *= 2;
 			module->nodes = realloc(module->nodes, size * sizeof(ASTNode*));
