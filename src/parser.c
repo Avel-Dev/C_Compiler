@@ -103,79 +103,6 @@ Token* expect(Parser* parser, TokenType type) {
 	return NULL;
 }
 
-ASTNode* parse_expression(Parser* parser, int min_precedence) {
-	Token* token = parser_peek(parser);
-	ASTNode* left = NULL;
-
-	while (token && token->type != TOKEN_SEMICOLON) {
-		print_token(token);
-
-		if (token->type == TOKEN_IDENTIFIER) {
-			left = malloc(sizeof(ASTNode));
-			left->type = AST_IDENTIFIER;
-			left->data.identifier = malloc(sizeof(IdentifierNode));
-			left->data.identifier->identifier = token;
-			parser_advance(parser);
-		} else if (isLiteral(token->type)) {
-			left = malloc(sizeof(ASTNode));
-			left->type = AST_LITERAL;
-			left->data.literal = malloc(sizeof(LiteralNode));
-			left->data.literal->literal = token;
-			parser_advance(parser);
-		} else if (isBinaryOperator(token->type)) {
-			if (!left) {
-				// throw parser error
-			}
-			int precedence = get_precedence(token->type);
-
-			if (precedence < min_precedence) {
-				return left;
-			}
-			BinaryOperatorNode* binary_operator =
-			  malloc(sizeof(BinaryOperatorNode));
-			binary_operator->operator = token;
-			binary_operator->left = left;
-			parser_advance(parser);
-			binary_operator->right = parse_expression(parser, precedence + 1);
-			left = malloc(sizeof(ASTNode));
-			left->type = AST_BINARY_OPERATOR;
-			left->data.binary = binary_operator;
-		} else if (token->type == TOKEN_LPAREN) {
-			if (left) {
-				// throw parser error
-			}
-			free(token);
-			parser_advance(parser);
-		} else if (token->type == TOKEN_RPAREN) {
-			free(token);
-			parser_advance(parser);
-			return left;
-		}
-		token = parser_peek(parser);
-	}
-	if (token && token->type == TOKEN_SEMICOLON) {
-		free(token);
-		parser_advance(parser);
-	}
-	return left;
-}
-
-ASTNode* parse_quality(Parser* parser) {
-	return NULL;
-}
-
-ASTNode* parse_term(Parser* parser) {
-	return NULL;
-}
-
-ASTNode* parse_factor(Parser* parser) {
-	return NULL;
-}
-
-ASTNode* parse_unary(Parser* parser) {
-	return NULL;
-}
-
 char* string_concate(const char* null_terminated, const char* non_null_terminated, int len) {
 	int literal_len = strlen(null_terminated);
 	char* result = malloc(literal_len + len);
@@ -185,43 +112,125 @@ char* string_concate(const char* null_terminated, const char* non_null_terminate
 	return result;
 }
 
-/*
 ASTNode* parse_primary(Parser* parser) {
-	if (parser->token == NULL) return NULL;
+	Token* token = parser_peek(parser);
 
-	ASTNode* curr = malloc(sizeof(ASTNode));
-	const Token* token = parser_peek(parser);
-	if (isLiteral(token->type)) {
-		curr->data.literal = malloc(sizeof(LiteralNode));
-		curr->data.literal->literal = parser_advance(parser);
-		curr->type = AST_LITERAL;
-
-	} else if (token->type == TOKEN_IDENTIFIER) {
-		curr->data.identifier = malloc(sizeof(IdentifierNode));
-		curr->data.identifier->identifier = parser_advance(parser);
-		curr->type = AST_IDENTIFIER;
-	} else if (token->type == TOKEN_LPAREN) {
-		free(curr);
-		free(parser_advance(parser));
-		curr = parse_expression(parser);
-		curr->type = AST_EXPRESSION;
-	} else {
-		curr->type = AST_ERROR;
-		curr->data.error = malloc(sizeof(ErrorNode));
-		curr->data.error->error_string = string_concate(
-		  "expected primary not found: instead found", token->start, token->length);
-	}
-
-	return curr;
-}*/
-
-ASTNode* parse_initializer(Parser* parser) {
-	if (!parser->token) {
+	if (!token) {
 		return NULL;
 	}
 
-	//	return parse_primary(parser);
-	return parse_expression(parser, INT_MIN);
+	ASTNode* node = malloc(sizeof(ASTNode));
+
+	if (token->type == TOKEN_IDENTIFIER) {
+		node->type = AST_IDENTIFIER;
+		node->data.identifier = malloc(sizeof(IdentifierNode));
+		node->data.identifier->identifier = token;
+
+		parser_advance(parser);
+		return node;
+	}
+
+	if (isLiteral(token->type)) {
+		node->type = AST_LITERAL;
+		node->data.literal = malloc(sizeof(LiteralNode));
+		node->data.literal->literal = token;
+
+		parser_advance(parser);
+		return node;
+	}
+	if (isUnaryOperator(token->type)) {
+		node->type = AST_UNARY_OPERATOR;
+		node->data.unary = malloc(sizeof(UnaryOperatorNode));
+		node->data.unary->operator = token;
+		parser_advance(parser);
+		int precedence = get_precedence(token->type);
+		node->data.unary->operand = parse_expression(parser, precedence);
+
+		token = parser_peek(parser);
+
+		if (!node->data.unary->operand) {
+			free(node->data.unary);
+			free(node);
+			return NULL;
+		}
+
+		parser_advance(parser);
+		return node;
+	}
+	if (token->type == TOKEN_LPAREN) {
+		free(node);
+
+		parser_advance(parser);
+
+		node = parse_expression(parser, 0);
+
+		token = parser_peek(parser);
+
+		if (!token || token->type != TOKEN_RPAREN) {
+			// Throw parser error: expected ')'
+			return NULL;
+		}
+
+		parser_advance(parser);
+		return node;
+	}
+
+	free(node);
+
+	// Throw parser error: expected expression
+	return NULL;
+}
+
+ASTNode* parse_expression(Parser* parser, int min_precedence) {
+	ASTNode* left = parse_primary(parser);
+
+	if (!left) {
+		return NULL;
+	}
+
+	while (1) {
+		Token* token = parser_peek(parser);
+		if (!token) break;
+
+		if (token->type == TOKEN_SEMICOLON || token->type == TOKEN_RPAREN) {
+			break;
+		}
+
+		if (!isBinaryOperator(token->type)) {
+			break;
+		}
+
+		int precedence = get_precedence(token->type);
+
+		if (precedence < min_precedence) {
+			break;
+		}
+
+		Token* operator_token = token;
+		parser_advance(parser);
+
+		ASTNode* right = parse_expression(parser, precedence + 1);
+
+		if (!right) {
+			// Throw parser error: expected expression after operator
+			return NULL;
+		}
+
+		BinaryOperatorNode* binary = malloc(sizeof(BinaryOperatorNode));
+
+		binary->operator = operator_token;
+		binary->left = left;
+		binary->right = right;
+
+		ASTNode* parent = malloc(sizeof(ASTNode));
+
+		parent->type = AST_BINARY_OPERATOR;
+		parent->data.binary = binary;
+
+		left = parent;
+	}
+
+	return left;
 }
 
 ASTNode* parse_declaration(Parser* parser) {
@@ -240,7 +249,7 @@ ASTNode* parse_declaration(Parser* parser) {
 			const Token* token = parser_peek(parser);
 			if (token->type == TOKEN_ASSIGN) {
 				free(parser_advance(parser));
-				declaration->initializer = parse_initializer(parser);
+				declaration->initializer = parse_expression(parser, 0);
 			} else if (token->type == TOKEN_SEMICOLON) {
 				free(parser_advance(parser));
 			}
@@ -277,11 +286,9 @@ ASTNode* parse_module(Parser* parser) {
 	int count = 0;
 	int size = 1;
 	module->nodes = malloc(size * sizeof(ASTNode*));
-	int h = 0;
-	while (h < 5 && parser->token) {
-		h++;
+	while (parser->token) {
 		ASTNode* var = parse_expression(parser, INT_MIN);
-		print_node(var);
+		if (var) print_node(var);
 		if (count == size) {
 			size *= 2;
 			module->nodes = realloc(module->nodes, size * sizeof(ASTNode*));

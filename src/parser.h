@@ -91,3 +91,6 @@ void parser_init(Parser* parser, Lexer* lexer);
 Token* expect(Parser* parser, TokenType type);
 Token* parser_peek(Parser* parser);
 Token* parser_advance(Parser* parser);
+
+ASTNode* parse_expression(Parser* parser, int min_precedence);
+ASTNode* parse_primary(Parser* parser);
