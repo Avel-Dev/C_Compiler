@@ -483,6 +483,14 @@ Token* lexer_next(Lexer* lexer) {
 	return NULL;
 }
 
+int isDataType(TokenType type) {
+	if (type == TOKEN_INT || type == TOKEN_FLOAT || type == TOKEN_CHAR ||
+	    type == TOKEN_VOID) {
+		return 1;
+	}
+	return 0;
+}
+
 int isLiteral(TokenType type) {
 	if (type == TOKEN_INT_LITERAL || type == TOKEN_FLOAT_LITERAL ||
 	    type == TOKEN_CHAR_LITERAL || type == TOKEN_STRING_LITERAL)

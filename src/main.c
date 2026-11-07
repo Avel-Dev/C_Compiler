@@ -38,7 +38,7 @@ int main() {
 	*/
 	Parser* parser = malloc(sizeof(Parser));
 	parser_init(parser, lexer);
-
+	printf("Parsing...\n");
 	ASTNode* module = parse_module(parser);
 	free(lexer);
 	free(parser);

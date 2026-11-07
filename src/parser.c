@@ -31,9 +31,19 @@ void print_node(const ASTNode* root) {
 		if (root->data.declaration->initializer)
 			print_node(root->data.declaration->initializer);
 	}
-	if (root->type == AST_IDENTIFIER) {
-		print_token(root->data.identifier->identifier);
+	if(root->type == AST_FUNCTION){
+		print_token(root->data.function->id);
+		print_token(root->data.function->type);
+		printf("Parameters: ");
+		for(int i = 0; i <  root->data.function->parameter_count; i++) {
+			print_node(root->data.function->parameters[i]);
+		}
+		printf("Body: ");
+		for(int i = 0; i <  root->data.function->body_count; i++) {
+			print_node(root->data.function->body[i]);
+		}
 	}
+
 }
 
 int get_precedence(TokenType type) {
@@ -95,7 +105,7 @@ char* AST_Node_name(ASTNodeType type) {
 	return "NOT VALID TYPE";
 }
 
-Token* expect(Parser* parser, TokenType type) {
+Token* parser_expect(Parser* parser, TokenType type) {
 	const Token* token = parser_peek(parser);
 	if (token && token->type == type) {
 		return parser_advance(parser);
@@ -233,30 +243,155 @@ ASTNode* parse_expression(Parser* parser, int min_precedence) {
 	return left;
 }
 
-ASTNode* parse_declaration(Parser* parser) {
-	Token *type = NULL, *id = NULL, *semicolon = NULL, *literal;
+ASTNode** parse_function_parameters(Parser* parser, int*  count) {
+	ASTNode** parameters = NULL;
+	int capacity = 0;
+	int length = 0;
+	*count = 0;
 
-	if ((type = expect(parser, TOKEN_INT))) {
-		if ((id = expect(parser, TOKEN_IDENTIFIER))) {
-			ASTNode* ast = malloc(sizeof(ASTNode));
-			ast->type = AST_DECLARATION;
-
-			DeclarationNode* declaration = malloc(sizeof(DeclarationNode));
-			declaration->identifier = id;
-			declaration->type = type;
-			declaration->initializer = NULL;
-
-			const Token* token = parser_peek(parser);
-			if (token->type == TOKEN_ASSIGN) {
-				free(parser_advance(parser));
-				declaration->initializer = parse_expression(parser, 0);
-			} else if (token->type == TOKEN_SEMICOLON) {
-				free(parser_advance(parser));
-			}
-
-			ast->data.declaration = declaration;
-			return ast;
+	Token* token = NULL;
+	while(1) {
+		token = parser_peek(parser);
+		if(!token) {
+			// error
+			return NULL;
 		}
+		if(token->type == TOKEN_RPAREN) {
+			*count = length;
+			return parameters;
+		}		
+		if(!isDataType(token->type)) {
+			//datatype required error
+			return NULL;	
+		}
+		Token* type = parser_advance(parser);
+		Token* id = token;
+
+		if(!(id = parser_expect(parser, TOKEN_IDENTIFIER))){
+			//identifier required error
+			return NULL;
+		}
+
+		ASTNode* parameter = malloc(sizeof(ASTNode));
+		parameter->type = AST_DECLARATION;
+		parameter->data.declaration = malloc(sizeof(DeclarationNode));
+
+		if(!parameter->data.declaration) {
+			free(parameter);
+			return NULL;
+		} 
+		parameter->data.declaration->identifier = id;
+		parameter->data.declaration->type = type;
+
+		token = parser_peek(parser);
+		if(token->type == TOKEN_ASSIGN) {
+			parser_delete_front(parser);	
+			parameter->data.declaration->initializer = parse_expression(parser, 0);
+			token = parser_peek(parser);
+			if(token->type == TOKEN_SEMICOLON) {
+				// can't end on semicolon in argument list
+				return NULL;
+			}
+		} 
+		if(length == capacity) {
+			if(capacity == 0) capacity = 1;
+			else capacity = capacity*2;
+
+			parameters = realloc(parameters, capacity*sizeof(ASTNode*));
+		}
+
+		parameters[length++] = parameter;
+
+		if(token->type == TOKEN_COMMA) {	
+			parser_delete_front(parser);	
+		}	
+	}
+
+}
+
+ASTNode** parse_function_body(Parser* parser, int*  count) {
+	ASTNode** statements = NULL;
+	*count = 0;
+	Token* token = parser_peek(parser);
+	if(token->type == TOKEN_RBRACE){
+		return statements;
+	}
+}
+
+FunctionNode* parse_function(Parser* parser) {
+
+	FunctionNode* node = malloc(sizeof(FunctionNode));
+	int count= 0;
+	ASTNode** parameters = parse_function_parameters(parser, &count); 
+	node->parameters = parameters;
+	node->parameter_count = count;
+	Token* token = parser_peek(parser);
+	if(token->type == TOKEN_RPAREN){
+		parser_delete_front(parser);
+		token = parser_peek(parser);
+		if(token->type == TOKEN_LBRACE) {
+			parser_delete_front(parser);
+		}
+	}
+	ASTNode** statements = parse_function_body(parser, &count);
+	node->body = statements;
+	node->body_count = count;
+	
+	return node;
+}
+
+ASTNode* parse_declaration(Parser* parser) {
+	Token* type = parser_peek(parser);
+	Token* id = NULL;
+
+	if (!isDataType(type->type)) {
+		// invalid start parser error
+		return NULL;
+	}
+
+	type = parser_advance(parser);
+	if (!(id = parser_expect(parser, TOKEN_IDENTIFIER))) {
+		// identifier expected error
+
+		return NULL;
+	}
+
+	Token* token = parser_peek(parser);
+	if (token->type == TOKEN_ASSIGN) {
+		ASTNode* node = malloc(sizeof(ASTNode));
+		node->type = AST_DECLARATION;
+		node->data.declaration = malloc(sizeof(DeclarationNode));
+		node->data.declaration->type = type;
+		node->data.declaration->identifier = id;
+
+		parser_delete_front(parser);
+
+		ASTNode* initializer = parse_expression(parser, 0);
+		if (!initializer) {
+			free(node->data.declaration);
+			free(node);
+			// initializer required error
+			return NULL;
+		}
+		node->data.declaration->initializer = initializer;
+		return node;
+	} else if (token->type == TOKEN_LPAREN) {
+		ASTNode* node = malloc(sizeof(ASTNode));
+		node->type = AST_FUNCTION;
+
+		parser_delete_front(parser);
+
+		node->data.function = parse_function(parser);
+		node->data.function->id = id;
+		node->data.function->type = type;
+		return node;
+	} else if (token->type == TOKEN_SEMICOLON) {
+		ASTNode* node = malloc(sizeof(ASTNode));
+		node->type = AST_DECLARATION;
+		node->data.declaration = malloc(sizeof(DeclarationNode));
+		node->data.declaration->type = type;
+		node->data.declaration->identifier = id;
+		return node;
 	}
 
 	return NULL;
@@ -266,6 +401,11 @@ void parser_init(Parser* parser, Lexer* lexer) {
 	parser->lexer = lexer;
 	parser->next = lexer_next(lexer);
 
+	parser_advance(parser);
+}
+
+void parser_delete_front(Parser* parser) {
+	free(parser->token);
 	parser_advance(parser);
 }
 
@@ -286,8 +426,18 @@ ASTNode* parse_module(Parser* parser) {
 	int count = 0;
 	int size = 1;
 	module->nodes = malloc(size * sizeof(ASTNode*));
-	while (parser->token) {
-		ASTNode* var = parse_expression(parser, INT_MIN);
+	Token* token = NULL;
+	while (1) {
+		token = parser_peek(parser);
+		if (!token) break;
+
+		if (token->type == TOKEN_SEMICOLON || token->type == TOKEN_RPAREN || token->type == TOKEN_RBRACE) {
+			parser_delete_front(parser);
+			continue;
+		}
+
+		ASTNode* var = parse_declaration(parser);
+
 		if (var) print_node(var);
 		if (count == size) {
 			size *= 2;

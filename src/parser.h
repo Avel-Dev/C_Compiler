@@ -24,10 +24,13 @@ typedef struct {
 	int size;
 } ModuleNode;
 
-typedef struct {
-	ASTNode** nodes;
-	int count;
-	// datatype
+typedef struct {	
+	const Token* id;
+	const Token* type;
+	ASTNode** parameters;
+	int parameter_count;
+	ASTNode** body;
+	int body_count;
 } FunctionNode;
 
 typedef struct {
@@ -81,16 +84,19 @@ typedef struct {
 	Token* next;
 } Parser;
 
+void print_token(const Token* token);
+
+// these can use parser
+void parser_init(Parser* parser, Lexer* lexer);
+Token* parser_expect(Parser* parser, TokenType type);
+Token* parser_peek(Parser* parser);
+void parser_delete_front(Parser* parser);
+Token* parser_advance(Parser* parser);
+
+// these have to use the methods
+FunctionNode* parse_function(Parser* parser);
 ASTNode* parse_declaration(Parser* parser);
 ASTNode* parse_module(Parser* parser);
 ASTNode* parse_initializer(Parser* parser);
-
-void print_token(const Token* token);
-void parser_init(Parser* parser, Lexer* lexer);
-
-Token* expect(Parser* parser, TokenType type);
-Token* parser_peek(Parser* parser);
-Token* parser_advance(Parser* parser);
-
 ASTNode* parse_expression(Parser* parser, int min_precedence);
 ASTNode* parse_primary(Parser* parser);
