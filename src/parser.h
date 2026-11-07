@@ -3,6 +3,7 @@
 #include "lexer.h"
 
 typedef enum {
+	AST_SCOPE,
 	AST_MODULE,
 	AST_FUNCTION,
 	AST_UNARY_OPERATOR,
@@ -24,13 +25,17 @@ typedef struct {
 	int size;
 } ModuleNode;
 
+typedef struct {
+	ASTNode** body;
+	int body_count;
+} ScopeBody;
+
 typedef struct {	
 	const Token* id;
 	const Token* type;
 	ASTNode** parameters;
 	int parameter_count;
-	ASTNode** body;
-	int body_count;
+	ScopeBody scope;
 } FunctionNode;
 
 typedef struct {
@@ -50,6 +55,7 @@ typedef struct {
 
 typedef struct {
 	const Token* identifier;
+	const ASTNode* initializer;
 } IdentifierNode;
 
 typedef struct {
@@ -70,6 +76,7 @@ union Data {
 	IdentifierNode* identifier;
 	DeclarationNode* declaration;
 	UnaryOperatorNode* unary;
+	ScopeBody* scope;
 	ErrorNode* error;
 };
 
@@ -79,9 +86,10 @@ struct ASTNode {
 };
 
 typedef struct {
-	Token* token;
 	Lexer* lexer;
-	Token* next;
+	Token** buffer;
+	int next;
+	int buffer_size; // look ahead buffer
 } Parser;
 
 void print_token(const Token* token);
@@ -89,9 +97,10 @@ void print_token(const Token* token);
 // these can use parser
 void parser_init(Parser* parser, Lexer* lexer);
 Token* parser_expect(Parser* parser, TokenType type);
-Token* parser_peek(Parser* parser);
+Token* parser_peek(Parser* parser, int next);
 void parser_delete_front(Parser* parser);
 Token* parser_advance(Parser* parser);
+Token** parser_advance_multiple(Parser* parser, int advance);
 
 // these have to use the methods
 FunctionNode* parse_function(Parser* parser);
