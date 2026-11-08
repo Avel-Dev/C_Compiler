@@ -35,7 +35,7 @@ typedef struct {
 	const Token* type;
 	ASTNode** parameters;
 	int parameter_count;
-	ScopeBody scope;
+	ScopeBody* scope;
 } FunctionNode;
 
 typedef struct {
@@ -103,6 +103,8 @@ Token* parser_advance(Parser* parser);
 Token** parser_advance_multiple(Parser* parser, int advance);
 
 // these have to use the methods
+
+ScopeBody* parse_body(Parser* parser);
 FunctionNode* parse_function(Parser* parser);
 ASTNode* parse_declaration(Parser* parser);
 ASTNode* parse_module(Parser* parser);

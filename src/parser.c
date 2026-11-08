@@ -10,6 +10,10 @@
 
 void print_node(const ASTNode* root) {
 	printf("AST Node:  %s\n", AST_Node_name(root->type));
+	if(root->type == AST_IDENTIFIER) {
+		print_token(root->data.identifier->identifier);
+		print_node(root->data.identifier->initializer);
+	}
 	if (root->type == AST_LITERAL) {
 		print_token(root->data.literal->literal);
 	}
@@ -39,8 +43,8 @@ void print_node(const ASTNode* root) {
 			print_node(root->data.function->parameters[i]);
 		}
 		printf("Body: ");
-		for(int i = 0; i <  root->data.function->scope.body_count; i++) {
-			print_node(root->data.function->scope.body[i]);
+		for(int i = 0; i <  root->data.function->scope->body_count; i++) {
+			print_node(root->data.function->scope->body[i]);
 		}
 	}
 
@@ -144,7 +148,7 @@ ASTNode* parse_primary(Parser* parser) {
 		node->type = AST_LITERAL;
 		node->data.literal = malloc(sizeof(LiteralNode));
 		node->data.literal->literal = token;
-
+	
 		parser_advance(parser);
 		return node;
 	}
@@ -265,7 +269,7 @@ ASTNode** parse_function_parameters(Parser* parser, int*  count) {
 			return NULL;	
 		}
 		Token* type = parser_advance(parser);
-		Token* id = token;
+		Token* id = NULL;
 
 		if(!(id = parser_expect(parser, TOKEN_IDENTIFIER))){
 			//identifier required error
@@ -324,10 +328,8 @@ FunctionNode* parse_function(Parser* parser) {
 			parser_delete_front(parser);
 		}
 	}
-	ASTNode** statements = parse_function_body(parser, &count);
-	node->scope.body = statements;
-	node->scope.body_count = count;
-	
+	node->scope = parse_body(parser);
+		
 	return node;
 }
 
@@ -390,14 +392,13 @@ ASTNode* parse_declaration(Parser* parser) {
 
 void parser_init(Parser* parser, Lexer* lexer) {
 	parser->lexer = lexer;
-	parser->buffer = malloc(parser->buffer_size * sizeof(Token*));
 	parser->buffer_size = 3;
+	parser->buffer = malloc(parser->buffer_size * sizeof(Token*));
 	parser->next = 0;
 	for (int i = 0; i< parser->buffer_size;i++) {
 		parser->buffer[i] = lexer_next(lexer);
+		print_token(parser->buffer[i]);
 	}
-
-	parser_advance(parser);
 }
 
 void parser_delete_front(Parser* parser) {
@@ -427,29 +428,31 @@ Token* parser_advance(Parser* parser) {
 	return temp;
 }
 
-Token* parser_peek(Parser* parser, int next) {
-	next = next % parser->buffer_size;
-	return parser->buffer[next];
+Token* parser_peek(Parser* parser, int advance) {
+	advance = (parser->next + advance) % parser->buffer_size;
+	return parser->buffer[advance];
 }
 
 // finish scoped body creations
-ScopeBody* parse_body(Parser* parser, int*  count) {
+ScopeBody* parse_body(Parser* parser) {
 	ScopeBody* scope = malloc(sizeof(ScopeBody));
-	*count = 0;
 	int length = 0;
-	int size = 1;
+	int size = 0;
 
-	ASTNode** statements = malloc(size * sizeof(ASTNode*));
+	ASTNode** statements = NULL;
 	Token* token = NULL;
 	ASTNode* node = NULL;
 	while (1) {
 		token = parser_peek(parser, 0);
-
-		if(token->type == TOKEN_LBRACE) {
+		if(token->type == TOKEN_SEMICOLON) {	
+			parser_delete_front(parser);	
+			continue;
+		}
+		else if(token->type == TOKEN_LBRACE) {
 			parser_delete_front(parser);	
 
 			int sub_body_count = 0;
-			ScopeBody* scope = parse_body(parser, sub_body_count);	
+			ScopeBody* scope = parse_body(parser);	
 			node = malloc(sizeof(ASTNode));
 
 			node->data.scope = scope;
@@ -457,10 +460,9 @@ ScopeBody* parse_body(Parser* parser, int*  count) {
 		}
 		else if(token->type == TOKEN_RBRACE){
 			scope->body = statements;
-			scope->body_count = count;
-
-			free(token->type);
-			parser_advance(parser);
+			scope->body_count = length;
+			
+			parser_delete_front(parser);
 			return scope;
 		}
 
@@ -477,6 +479,7 @@ ScopeBody* parse_body(Parser* parser, int*  count) {
 			node->data.declaration = malloc(sizeof(DeclarationNode));
 			node->data.declaration->identifier = token_1;
 			node->data.declaration->type = token;
+			node->type = AST_DECLARATION;
 
 			free(parser_advance_multiple(parser, 3));
 			free(token_2);
@@ -485,6 +488,7 @@ ScopeBody* parse_body(Parser* parser, int*  count) {
 		}
 		else if(isDataType(token->type) && token_1->type == TOKEN_IDENTIFIER && token_2->type == TOKEN_SEMICOLON) {
 			node = malloc(sizeof(ASTNode));
+			node->type = AST_DECLARATION;
 			node->data.declaration = malloc(sizeof(DeclarationNode));
 			node->data.declaration->identifier = token_1;
 			node->data.declaration->type = token;
@@ -494,6 +498,7 @@ ScopeBody* parse_body(Parser* parser, int*  count) {
 		}
 		else if(token->type == TOKEN_IDENTIFIER && token_1->type == TOKEN_ASSIGN) {
 			node = malloc(sizeof(ASTNode));
+			node->type = AST_IDENTIFIER;
 			node->data.identifier = malloc(sizeof(IdentifierNode));
 			node->data.identifier->identifier = token;
 
@@ -503,8 +508,9 @@ ScopeBody* parse_body(Parser* parser, int*  count) {
 			node->data.identifier->initializer = parse_expression(parser, 0);
 		}
 
-		if((size - 1) == length) {
-			size = size * 2;
+		if(size == length) {
+			if(size == 0) size = 1;
+			else size = size * 2;
 			statements = realloc(statements, sizeof(ASTNode*) * size);
 		}
 		statements[length++] = node;
