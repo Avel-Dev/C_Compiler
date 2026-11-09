@@ -499,7 +499,7 @@ int isLiteral(TokenType type) {
 }
 
 int isUnaryOperator(TokenType type) {
-	if (type == TOKEN_INCREMENT || type == TOKEN_INCREMENT || type == TOKEN_STAR ||
+	if (type == TOKEN_DECREMENT || type == TOKEN_INCREMENT || type == TOKEN_STAR ||
 	    type == TOKEN_SUB) {
 		return 1;
 	}

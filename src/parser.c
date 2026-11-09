@@ -138,29 +138,25 @@ ASTNode* parse_primary(Parser* parser) {
 	if (token->type == TOKEN_IDENTIFIER) {
 		node->type = AST_IDENTIFIER;
 		node->data.identifier = malloc(sizeof(IdentifierNode));
-		node->data.identifier->identifier = token;
+		node->data.identifier->identifier = parser_advance(parser);
 
-		parser_advance(parser);
 		return node;
 	}
 
 	if (isLiteral(token->type)) {
 		node->type = AST_LITERAL;
 		node->data.literal = malloc(sizeof(LiteralNode));
-		node->data.literal->literal = token;
-	
-		parser_advance(parser);
+		node->data.literal->literal = parser_advance(parser);	
+		
 		return node;
 	}
 	if (isUnaryOperator(token->type)) {
 		node->type = AST_UNARY_OPERATOR;
 		node->data.unary = malloc(sizeof(UnaryOperatorNode));
-		node->data.unary->operator = token;
-		parser_advance(parser);
-		int precedence = get_precedence(token->type);
+		node->data.unary->operator = parser_advance(parser);
+		
+		int precedence = 8;
 		node->data.unary->operand = parse_expression(parser, precedence);
-
-		token = parser_peek(parser, 0);
 
 		if (!node->data.unary->operand) {
 			free(node->data.unary);
@@ -168,24 +164,17 @@ ASTNode* parse_primary(Parser* parser) {
 			return NULL;
 		}
 
-		parser_advance(parser);
 		return node;
 	}
 	if (token->type == TOKEN_LPAREN) {
-		free(node);
-
-		parser_advance(parser);
-
+		parser_delete_front(parser);
 		node = parse_expression(parser, 0);
 
-		token = parser_peek(parser, 0);
-
-		if (!token || token->type != TOKEN_RPAREN) {
-			// Throw parser error: expected ')'
+		if (!node) {
+			exit(1);	
 			return NULL;
 		}
 
-		parser_advance(parser);
 		return node;
 	}
 
@@ -207,6 +196,7 @@ ASTNode* parse_expression(Parser* parser, int min_precedence) {
 		if (!token) break;
 
 		if (token->type == TOKEN_SEMICOLON || token->type == TOKEN_RPAREN) {
+			parser_delete_front(parser);
 			break;
 		}
 
@@ -261,6 +251,7 @@ ASTNode** parse_function_parameters(Parser* parser, int*  count) {
 			return NULL;
 		}
 		if(token->type == TOKEN_RPAREN) {
+			parser_delete_front(parser);
 			*count = length;
 			return parameters;
 		}		
@@ -320,14 +311,12 @@ FunctionNode* parse_function(Parser* parser) {
 	ASTNode** parameters = parse_function_parameters(parser, &count); 
 	node->parameters = parameters;
 	node->parameter_count = count;
+
 	Token* token = parser_peek(parser, 0);
-	if(token->type == TOKEN_RPAREN){
+	if(token->type == TOKEN_LBRACE) {
 		parser_delete_front(parser);
-		token = parser_peek(parser, 0);
-		if(token->type == TOKEN_LBRACE) {
-			parser_delete_front(parser);
-		}
 	}
+
 	node->scope = parse_body(parser);
 		
 	return node;
@@ -402,8 +391,8 @@ void parser_init(Parser* parser, Lexer* lexer) {
 }
 
 void parser_delete_front(Parser* parser) {
-	free(parser->buffer[parser->next]);
-	parser_advance(parser);
+	Token* token = parser_advance(parser);
+	free(token);
 }
 
 
@@ -444,6 +433,10 @@ ScopeBody* parse_body(Parser* parser) {
 	ASTNode* node = NULL;
 	while (1) {
 		token = parser_peek(parser, 0);
+		if(token) {
+			// throw error;
+			return NULL;
+		}
 		if(token->type == TOKEN_SEMICOLON) {	
 			parser_delete_front(parser);	
 			continue;
@@ -465,12 +458,6 @@ ScopeBody* parse_body(Parser* parser) {
 			parser_delete_front(parser);
 			return scope;
 		}
-
-		if (!token) {
-			// return error
-			return NULL;
-		}
-
 		Token* token_1 = parser_peek(parser, 1);
 		Token* token_2 = parser_peek(parser, 2);
 
@@ -535,12 +522,15 @@ ASTNode* parse_module(Parser* parser) {
 
 		ASTNode* var = parse_declaration(parser);
 
-		if (var) print_node(var);
-		if (count == size) {
-			size *= 2;
-			module->nodes = realloc(module->nodes, size * sizeof(ASTNode*));
+		if (var) {
+			print_node(var);
+			if (count == size) {
+				size *= 2;
+				module->nodes = realloc(module->nodes, size * sizeof(ASTNode*));
+			}
+
+			module->nodes[count++] = var;
 		}
-		module->nodes[count++] = var;
 	}
 	module->count = count;
 	module->size = size;
